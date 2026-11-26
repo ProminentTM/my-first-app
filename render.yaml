@@ -1,0 +1,35 @@
+services:
+  - type: web
+    name: fentras-workspace
+    runtime: python
+    region: frankfurt
+    plan: 0.5c-512mb
+    buildCommand: npm install --no-audit --no-fund && npm run build && pip install -r backend/requirements.txt && cd backend && python manage.py collectstatic --no-input
+    preDeployCommand: cd backend && python manage.py migrate --noinput
+    startCommand: cd backend && gunicorn config.wsgi:application --bind 0.0.0.0:$PORT --workers 2
+    healthCheckPath: /api/health/
+    envVars:
+      - key: DJANGO_DEBUG
+        value: "false"
+      - key: DJANGO_SECRET_KEY
+        generateValue: true
+      - key: DJANGO_ALLOWED_HOSTS
+        fromService:
+          name: fentras-workspace
+          type: web
+          envVarKey: RENDER_EXTERNAL_HOSTNAME
+      - key: DJANGO_TIME_ZONE
+        value: Africa/Harare
+      - key: DATABASE_URL
+        fromDatabase:
+          name: fentras-db
+          property: connectionString
+
+databases:
+  - name: fentras-db
+    region: frankfurt
+    plan: 0.1c-256mb
+    databaseName: fentras
+    user: fentras
+    diskSizeGB: 1
+    ipAllowList: []

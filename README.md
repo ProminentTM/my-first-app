@@ -16,6 +16,19 @@ npm run build
 npm run preview
 ```
 
+## Render deployment (staging / pilot)
+
+The root `render.yaml` Blueprint runs the Django API and React frontend on one HTTPS origin and provisions a private-network PostgreSQL database in Frankfurt. Review Render's current service, database, and storage charges before creating the Blueprint: the configured web and database plans are paid plans. Do not deploy real branch/customer records until the rollout has passed an independent security review and the operating team has approved the procedure.
+
+1. Push this repository to a private GitHub repository. Do not commit `.env` files, database URLs, or other credentials.
+2. In Render, choose **New → Blueprint**, connect the repository, and review `render.yaml`. Confirm the paid plan and database storage charges before approving creation.
+3. Wait for the first deployment to finish. Render runs `collectstatic`, applies database migrations in the pre-deploy step, and checks `/api/health/`.
+4. In the Render service **Shell**, run `cd backend && python manage.py createsuperuser`. Visit `https://<your-service>.onrender.com/admin/`, sign in, and assign the initial account the approved role in **User profiles**. Create separate accounts for the Managing Director and Branch Manager; do not share the superuser account for daily use.
+5. Test the HTTPS app, admin, sign-in/sign-out, health endpoint, a non-sensitive test record, and restoration from a database backup. Confirm that logout, role-based approval, and browser-local drafts behave as expected.
+6. Configure a custom domain only after choosing and controlling the domain; then update `DJANGO_ALLOWED_HOSTS` in Render to the exact host and verify TLS and redirects.
+
+Blueprint updates auto-deploy from the connected branch by default. Review each change and its database impact before merging. Render database URLs and generated Django secrets stay in the Render dashboard; never paste them into chat or source control. For recovery, use Render's database backup/export controls and periodically test a restore into a separate database. A service deploy is not by itself a disaster-recovery plan.
+
 ## Backend API (development)
 
 The Django API provides authenticated endpoints for Customers, Sales & Invoices, Receipts, Payments, Supplier Bills, Cash Close, controlled Stock movements, Exceptions, approved exchange rates, audit events, and accounts. Sign in from the app header to use server-backed operational workflows. Each record uses an authenticated account and is validated by the API.
@@ -34,7 +47,7 @@ In another terminal, run the Vite app. Its `/api` requests are proxied to Django
 
 Signing in never uploads browser-local drafts automatically. Cash Close, Stock, and Exception drafts appear in a manual outbox: review each draft and its source documents, then choose **Review & upload** when it is safe to submit. Stable submission IDs make retries safe after uncertain network responses. Other module drafts remain local; verify their source documents and check for existing server records before re-entering them.
 
-Development defaults to SQLite. Set `DATABASE_URL` to a PostgreSQL connection URL, `DJANGO_SECRET_KEY` to a private random value, `DJANGO_DEBUG=false`, and `DJANGO_ALLOWED_HOSTS` for deployment. PostgreSQL deployment, TLS, backups, and hosting have not been provisioned.
+Development defaults to SQLite. Render deployment reads its PostgreSQL connection URL and generated `DJANGO_SECRET_KEY` from Render environment settings, with `DJANGO_DEBUG=false` and a host allowlist derived from the service hostname. HTTPS is terminated by Render; Django trusts the forwarded HTTPS header.
 
 ## Prototype scope
 
@@ -42,4 +55,4 @@ When signed in, Customers, Sales & Invoices, Receipts, Supplier Bills, Payments,
 
 In server mode, customer balances use server-linked sales and receipts; local mode uses only browser drafts and is not authoritative. Existing local records remain separate and are not counted in server balances. The API records append-only application audit events for supported writes, but these events are not tamper-proof against database administrators. The manual outbox covers Cash Close, Stock, and Exceptions only; business-key conflicts stay queued until corrected and retried or explicitly removed after review, and other modules have no sync workflow. There is no automatic background synchronization. Cash Close is not a bank reconciliation, stock is not a complete inventory system, and none of these records replace the controlled source books or workbook checks.
 
-Do not use this prototype as the system of record or enter sensitive customer information. A production rollout still requires an approved PostgreSQL host and credentials, deployment/TLS configuration, backups, monitoring, security review, audit hardening, broader offline sync and conflict handling, and workbook acceptance testing against the approved operating procedures.
+Do not use this prototype as the system of record or enter sensitive customer information. The Render Blueprint is deployment scaffolding, not production approval. A production rollout still requires an approved security review, monitoring, audit hardening, broader offline sync and conflict handling, documented backup/restore drills, and workbook acceptance testing against the approved operating procedures.
